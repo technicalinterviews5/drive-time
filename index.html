@@ -21,13 +21,13 @@
       font-size: 28px;
       font-weight: 700;
       color: #000;
-      margin: 24px 0 24px;
+      margin: 24px 0 20px;
     }
 
-    .input-row {
+    .row {
       display: flex;
       gap: 10px;
-      margin-bottom: 24px;
+      margin-bottom: 14px;
       align-items: center;
     }
 
@@ -43,7 +43,7 @@
       -webkit-appearance: none;
     }
 
-    .unit-toggle {
+    .toggle {
       display: flex;
       background: #fff;
       border-radius: 12px;
@@ -51,7 +51,7 @@
       flex-shrink: 0;
     }
 
-    .unit-toggle button {
+    .toggle button {
       padding: 12px 16px;
       font-size: 15px;
       font-weight: 500;
@@ -62,8 +62,14 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    .unit-toggle button.active {
+    .toggle button.active {
       background: #007aff;
+      color: #fff;
+      border-radius: 10px;
+    }
+
+    .toggle.vehicle button.active {
+      background: #34c759;
       color: #fff;
       border-radius: 10px;
     }
@@ -72,6 +78,7 @@
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
+      margin-bottom: 14px;
     }
 
     .card {
@@ -117,6 +124,44 @@
       margin-top: 4px;
     }
 
+    .fuel-info {
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #555;
+      line-height: 1.8;
+      margin-bottom: 10px;
+    }
+
+    .fuel-info .label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #aaa;
+      margin-bottom: 6px;
+    }
+
+    .fuel-total {
+      font-size: 28px;
+      font-weight: 700;
+      color: #34c759;
+    }
+
+    .fuel-breakdown {
+      font-size: 13px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .price-note {
+      font-size: 12px;
+      color: #bbb;
+      text-align: center;
+      margin-top: 2px;
+    }
+
     .placeholder {
       text-align: center;
       color: #aaa;
@@ -130,11 +175,18 @@
 
   <h1>Drive Time</h1>
 
-  <div class="input-row">
+  <div class="row">
     <input type="number" id="distInput" placeholder="Enter distance..." min="0" oninput="calculate()" />
-    <div class="unit-toggle">
+    <div class="toggle">
       <button class="active" id="btn-mi" onclick="setUnit('mi')">mi</button>
       <button id="btn-km" onclick="setUnit('km')">km</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="toggle vehicle" style="width:100%;">
+      <button class="active" id="btn-car" onclick="setVehicle('car')" style="flex:1;">Car (35 mpg)</button>
+      <button id="btn-truck" onclick="setVehicle('truck')" style="flex:1;">Truck (15 mpg)</button>
     </div>
   </div>
 
@@ -142,52 +194,76 @@
     <p class="placeholder">Enter a distance above<br>to see your drive times.</p>
   </div>
 
-  <script>
-    let unit = 'mi';
-
-    function setUnit(u) {
-      unit = u;
-      document.getElementById('btn-mi').classList.toggle('active', u === 'mi');
-      document.getElementById('btn-km').classList.toggle('active', u === 'km');
-      calculate();
-    }
-
-    function formatTime(hours) {
-      if (!isFinite(hours) || hours <= 0) return '—';
-      const h = Math.floor(hours);
-      const m = Math.round((hours - h) * 60);
-      if (h === 0) return m + ' min';
-      if (m === 0) return h + ' hr';
-      return h + ' hr ' + m + ' min';
-    }
-
-    function calculate() {
-      const raw = parseFloat(document.getElementById('distInput').value);
-      const container = document.getElementById('results');
-
-      if (isNaN(raw) || raw <= 0) {
-        container.innerHTML = '<p class="placeholder">Enter a distance above<br>to see your drive times.</p>';
-        return;
-      }
-
-      const distMi = unit === 'mi' ? raw : raw / 1.60934;
-      const speeds = [65, 70, 75];
-
-      const cards = speeds.map((speed, i) => {
-        const hours = distMi / speed;
-        const isFastest = i === speeds.length - 1;
-        return `
-          <div class="card${isFastest ? ' fastest' : ''}">
-            ${isFastest ? '<div class="badge">fastest</div>' : '<div class="spacer"></div>'}
-            <div class="speed-label">${speed} mph</div>
-            <div class="time-val">${formatTime(hours)}</div>
-            <div class="time-sub">${hours.toFixed(2)} hrs</div>
-          </div>`;
-      }).join('');
-
-      container.innerHTML = `<div class="cards">${cards}</div>`;
-    }
-  </script>
-
 </body>
+<script>
+  let unit = 'mi';
+  let vehicle = 'car';
+
+  const config = {
+    car:   { mpg: 35, pricePerGallon: 3.27, fuelLabel: 'Regular gas, Lexington KY', priceDate: 'Mar 16, 2026' },
+    truck: { mpg: 15, pricePerGallon: 4.56, fuelLabel: 'Diesel, Lexington KY',      priceDate: 'Mar 16, 2026' }
+  };
+
+  function setUnit(u) {
+    unit = u;
+    document.getElementById('btn-mi').classList.toggle('active', u === 'mi');
+    document.getElementById('btn-km').classList.toggle('active', u === 'km');
+    calculate();
+  }
+
+  function setVehicle(v) {
+    vehicle = v;
+    document.getElementById('btn-car').classList.toggle('active', v === 'car');
+    document.getElementById('btn-truck').classList.toggle('active', v === 'truck');
+    calculate();
+  }
+
+  function formatTime(hours) {
+    if (!isFinite(hours) || hours <= 0) return '—';
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    if (h === 0) return m + ' min';
+    if (m === 0) return h + ' hr';
+    return h + ' hr ' + m + ' min';
+  }
+
+  function calculate() {
+    const raw = parseFloat(document.getElementById('distInput').value);
+    const container = document.getElementById('results');
+
+    if (isNaN(raw) || raw <= 0) {
+      container.innerHTML = '<p class="placeholder">Enter a distance above<br>to see your drive times.</p>';
+      return;
+    }
+
+    const distMi = unit === 'mi' ? raw : raw / 1.60934;
+    const { mpg, pricePerGallon, fuelLabel, priceDate } = config[vehicle];
+    const gallonsUsed = distMi / mpg;
+    const totalCost = gallonsUsed * pricePerGallon;
+
+    const speeds = [65, 70, 75];
+
+    const cards = speeds.map((speed, i) => {
+      const hours = distMi / speed;
+      const isFastest = i === speeds.length - 1;
+      return `
+        <div class="card${isFastest ? ' fastest' : ''}">
+          ${isFastest ? '<div class="badge">fastest</div>' : '<div class="spacer"></div>'}
+          <div class="speed-label">${speed} mph</div>
+          <div class="time-val">${formatTime(hours)}</div>
+          <div class="time-sub">${hours.toFixed(2)} hrs</div>
+        </div>`;
+    }).join('');
+
+    const fuelSection = `
+      <div class="fuel-info">
+        <div class="label">Estimated fuel cost</div>
+        <div class="fuel-total">$${totalCost.toFixed(2)}</div>
+        <div class="fuel-breakdown">${distMi.toFixed(1)} mi &divide; ${mpg} mpg = ${gallonsUsed.toFixed(2)} gal &times; $${pricePerGallon.toFixed(2)}</div>
+      </div>
+      <p class="price-note">${fuelLabel} &mdash; price as of ${priceDate}</p>`;
+
+    container.innerHTML = `<div class="cards">${cards}</div>${fuelSection}`;
+  }
+</script>
 </html>
