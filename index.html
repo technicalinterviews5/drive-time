@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Drive Time" />
+  <title>Drive Time Estimator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f2f2f7;
+      min-height: 100vh;
+      padding: env(safe-area-inset-top, 20px) 16px 32px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #000;
+      margin: 24px 0 24px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+      align-items: center;
+    }
+
+    input[type="number"] {
+      flex: 1;
+      font-size: 16px;
+      padding: 12px 14px;
+      border: none;
+      border-radius: 12px;
+      background: #fff;
+      color: #000;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .unit-toggle {
+      display: flex;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .unit-toggle button {
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      color: #888;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .unit-toggle button.active {
+      background: #007aff;
+      color: #fff;
+      border-radius: 10px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px 8px;
+      text-align: center;
+    }
+
+    .card.fastest {
+      border: 2px solid #007aff;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #e5f0ff;
+      color: #007aff;
+      margin-bottom: 8px;
+    }
+
+    .spacer { height: 23px; }
+
+    .speed-label {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .time-val {
+      font-size: 20px;
+      font-weight: 600;
+      color: #000;
+      line-height: 1.2;
+    }
+
+    .time-sub {
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 4px;
+    }
+
+    .placeholder {
+      text-align: center;
+      color: #aaa;
+      font-size: 15px;
+      margin-top: 40px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Drive Time</h1>
+
+  <div class="input-row">
+    <input type="number" id="distInput" placeholder="Enter distance..." min="0" oninput="calculate()" />
+    <div class="unit-toggle">
+      <button class="active" id="btn-mi" onclick="setUnit('mi')">mi</button>
+      <button id="btn-km" onclick="setUnit('km')">km</button>
+    </div>
+  </div>
+
+  <div id="results">
+    <p class="placeholder">Enter a distance above<br>to see your drive times.</p>
+  </div>
+
+  <script>
+    let unit = 'mi';
+
+    function setUnit(u) {
+      unit = u;
+      document.getElementById('btn-mi').classList.toggle('active', u === 'mi');
+      document.getElementById('btn-km').classList.toggle('active', u === 'km');
+      calculate();
+    }
+
+    function formatTime(hours) {
+      if (!isFinite(hours) || hours <= 0) return '—';
+      const h = Math.floor(hours);
+      const m = Math.round((hours - h) * 60);
+      if (h === 0) return m + ' min';
+      if (m === 0) return h + ' hr';
+      return h + ' hr ' + m + ' min';
+    }
+
+    function calculate() {
+      const raw = parseFloat(document.getElementById('distInput').value);
+      const container = document.getElementById('results');
+
+      if (isNaN(raw) || raw <= 0) {
+        container.innerHTML = '<p class="placeholder">Enter a distance above<br>to see your drive times.</p>';
+        return;
+      }
+
+      const distMi = unit === 'mi' ? raw : raw / 1.60934;
+      const speeds = [65, 70, 75];
+
+      const cards = speeds.map((speed, i) => {
+        const hours = distMi / speed;
+        const isFastest = i === speeds.length - 1;
+        return `
+          <div class="card${isFastest ? ' fastest' : ''}">
+            ${isFastest ? '<div class="badge">fastest</div>' : '<div class="spacer"></div>'}
+            <div class="speed-label">${speed} mph</div>
+            <div class="time-val">${formatTime(hours)}</div>
+            <div class="time-sub">${hours.toFixed(2)} hrs</div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `<div class="cards">${cards}</div>`;
+    }
+  </script>
+
+</body>
+</html>
