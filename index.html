@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Trip Cost" />
-  <title>Trip Cost Estimator</title>
+  <title>Trip Cost</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -17,21 +17,32 @@
       padding: env(safe-area-inset-top, 20px) 16px 32px;
     }
 
-    h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #000;
-      margin: 24px 0 20px;
-    }
+    h1 { font-size: 28px; font-weight: 700; color: #000; margin: 24px 0 20px; }
 
-    .row {
+    .mode-toggle {
       display: flex;
-      gap: 10px;
-      margin-bottom: 14px;
-      align-items: center;
+      background: #e5e5ea;
+      border-radius: 10px;
+      padding: 2px;
+      margin-bottom: 16px;
     }
+    .mode-toggle button {
+      flex: 1;
+      padding: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      color: #888;
+      border-radius: 8px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mode-toggle button.active { background: #fff; color: #000; }
 
-    input[type="number"] {
+    .row { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
+
+    input[type="number"], input[type="text"] {
       flex: 1;
       font-size: 16px;
       padding: 12px 14px;
@@ -41,7 +52,27 @@
       color: #000;
       outline: none;
       -webkit-appearance: none;
+      width: 100%;
     }
+
+    .addr-block { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .addr-block input { width: 100%; }
+
+    .go-btn {
+      width: 100%;
+      padding: 13px;
+      font-size: 16px;
+      font-weight: 600;
+      background: #007aff;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .go-btn:active { opacity: 0.8; }
+    .go-btn:disabled { background: #b0c8f0; }
 
     .toggle {
       display: flex;
@@ -50,7 +81,6 @@
       overflow: hidden;
       flex-shrink: 0;
     }
-
     .toggle button {
       padding: 12px 16px;
       font-size: 15px;
@@ -61,148 +91,118 @@
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+    .toggle button.active { background: #007aff; color: #fff; border-radius: 10px; }
+    .toggle.vehicle button.active { background: #34c759; color: #fff; border-radius: 10px; }
 
-    .toggle button.active {
-      background: #007aff;
-      color: #fff;
-      border-radius: 10px;
-    }
-
-    .toggle.vehicle button.active {
-      background: #34c759;
-      color: #fff;
-      border-radius: 10px;
-    }
-
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 16px 8px;
-      text-align: center;
-    }
-
-    .card.fastest {
-      border: 2px solid #007aff;
-    }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+    .card { background: #fff; border-radius: 16px; padding: 16px 8px; text-align: center; }
+    .card.fastest { border: 2px solid #007aff; }
 
     .badge {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: #e5f0ff;
-      color: #007aff;
-      margin-bottom: 8px;
+      display: inline-block; font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 999px;
+      background: #e5f0ff; color: #007aff; margin-bottom: 8px;
     }
-
     .spacer { height: 23px; }
-
-    .speed-label {
-      font-size: 13px;
-      color: #888;
-      margin-bottom: 6px;
-    }
-
-    .time-val {
-      font-size: 20px;
-      font-weight: 600;
-      color: #000;
-      line-height: 1.2;
-    }
-
-    .time-sub {
-      font-size: 12px;
-      color: #aaa;
-      margin-top: 4px;
-    }
+    .speed-label { font-size: 13px; color: #888; margin-bottom: 6px; }
+    .time-val { font-size: 20px; font-weight: 600; color: #000; line-height: 1.2; }
+    .time-sub { font-size: 12px; color: #aaa; margin-top: 4px; }
 
     .fuel-info {
-      background: #fff;
-      border-radius: 12px;
-      padding: 12px 14px;
-      font-size: 13px;
-      color: #555;
-      line-height: 1.8;
-      margin-bottom: 10px;
+      background: #fff; border-radius: 12px;
+      padding: 12px 14px; font-size: 13px; color: #555;
+      line-height: 1.8; margin-bottom: 10px;
     }
-
     .fuel-info .label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #aaa;
-      margin-bottom: 6px;
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #aaa; margin-bottom: 6px;
     }
+    .fuel-total { font-size: 28px; font-weight: 700; color: #34c759; }
+    .fuel-breakdown { font-size: 13px; color: #888; margin-top: 2px; }
 
-    .fuel-total {
-      font-size: 28px;
-      font-weight: 700;
-      color: #34c759;
+    .dist-badge {
+      background: #fff; border-radius: 12px; padding: 10px 14px;
+      font-size: 13px; color: #555; margin-bottom: 14px; text-align: center;
     }
+    .dist-badge strong { color: #000; }
 
-    .fuel-breakdown {
-      font-size: 13px;
-      color: #888;
-      margin-top: 2px;
-    }
-
-    .price-note {
-      font-size: 12px;
-      color: #bbb;
-      text-align: center;
-      margin-top: 2px;
-    }
-
-    .placeholder {
-      text-align: center;
-      color: #aaa;
-      font-size: 15px;
-      margin-top: 40px;
-      line-height: 1.6;
-    }
+    .price-note { font-size: 12px; color: #bbb; text-align: center; margin-top: 2px; }
+    .error-msg { color: #ff3b30; font-size: 14px; text-align: center; margin-bottom: 12px; }
+    .placeholder { text-align: center; color: #aaa; font-size: 15px; margin-top: 40px; line-height: 1.6; }
   </style>
 </head>
 <body>
 
   <h1>Trip Cost</h1>
 
-  <div class="row">
-    <input type="number" id="distInput" placeholder="Enter distance..." min="0" oninput="calculate()" />
-    <div class="toggle">
-      <button class="active" id="btn-mi" onclick="setUnit('mi')">mi</button>
-      <button id="btn-km" onclick="setUnit('km')">km</button>
+  <!-- Mode switcher -->
+  <div class="mode-toggle">
+    <button class="active" id="btn-mode-addr" onclick="setMode('addr')">From / To Address</button>
+    <button id="btn-mode-dist" onclick="setMode('dist')">Enter Distance</button>
+  </div>
+
+  <!-- Address input -->
+  <div id="addr-section">
+    <div class="addr-block">
+      <input type="text" id="fromAddr" placeholder="From address..." />
+      <input type="text" id="toAddr" placeholder="To address..." />
+    </div>
+    <div class="row">
+      <div class="toggle vehicle" style="width:100%;">
+        <button class="active" id="btn-car-a" onclick="setVehicle('car')" style="flex:1;">Car (35 mpg)</button>
+        <button id="btn-truck-a" onclick="setVehicle('truck')" style="flex:1;">Truck (15 mpg)</button>
+      </div>
+    </div>
+    <button class="go-btn" id="goBtn" onclick="lookupDistance()">Calculate Trip</button>
+  </div>
+
+  <!-- Manual distance input -->
+  <div id="dist-section" style="display:none;">
+    <div class="row">
+      <input type="number" id="distInput" placeholder="Enter distance..." min="0" oninput="calculate()" />
+      <div class="toggle">
+        <button class="active" id="btn-mi" onclick="setUnit('mi')">mi</button>
+        <button id="btn-km" onclick="setUnit('km')">km</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="toggle vehicle" style="width:100%;">
+        <button class="active" id="btn-car-d" onclick="setVehicle('car')" style="flex:1;">Car (35 mpg)</button>
+        <button id="btn-truck-d" onclick="setVehicle('truck')" style="flex:1;">Truck (15 mpg)</button>
+      </div>
     </div>
   </div>
 
-  <div class="row">
-    <div class="toggle vehicle" style="width:100%;">
-      <button class="active" id="btn-car" onclick="setVehicle('car')" style="flex:1;">Car (35 mpg)</button>
-      <button id="btn-truck" onclick="setVehicle('truck')" style="flex:1;">Truck (15 mpg)</button>
-    </div>
-  </div>
-
+  <div id="error" class="error-msg" style="display:none;"></div>
   <div id="results">
-    <p class="placeholder">Enter a distance above<br>to see your drive times.</p>
+    <p class="placeholder">Enter addresses or a distance<br>to see your trip cost.</p>
   </div>
 
 </body>
 <script>
+  const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjZlMGI2ZDhjZTE4ZTRlMjI5ZTA1ZDM4MDQyMGRlZjAwIiwiaCI6Im11cm11cjY0In0=';
+
+  let mode = 'addr';
   let unit = 'mi';
   let vehicle = 'car';
+  let resolvedDistMi = null;
 
   const config = {
     car:   { mpg: 35, pricePerGallon: 3.27, fuelLabel: 'Regular gas, Lexington KY', priceDate: 'Mar 16, 2026' },
     truck: { mpg: 15, pricePerGallon: 4.56, fuelLabel: 'Diesel, Lexington KY',      priceDate: 'Mar 16, 2026' }
   };
+
+  function setMode(m) {
+    mode = m;
+    resolvedDistMi = null;
+    document.getElementById('btn-mode-addr').classList.toggle('active', m === 'addr');
+    document.getElementById('btn-mode-dist').classList.toggle('active', m === 'dist');
+    document.getElementById('addr-section').style.display = m === 'addr' ? '' : 'none';
+    document.getElementById('dist-section').style.display = m === 'dist' ? '' : 'none';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('results').innerHTML = '<p class="placeholder">Enter addresses or a distance<br>to see your trip cost.</p>';
+    if (m === 'dist') calculate();
+  }
 
   function setUnit(u) {
     unit = u;
@@ -213,35 +213,86 @@
 
   function setVehicle(v) {
     vehicle = v;
-    document.getElementById('btn-car').classList.toggle('active', v === 'car');
-    document.getElementById('btn-truck').classList.toggle('active', v === 'truck');
-    calculate();
+    ['car','truck'].forEach(x => {
+      const a = document.getElementById('btn-' + x + '-a');
+      const d = document.getElementById('btn-' + x + '-d');
+      if (a) a.classList.toggle('active', x === v);
+      if (d) d.classList.toggle('active', x === v);
+    });
+    if (resolvedDistMi !== null) renderResults(resolvedDistMi);
+    else calculate();
   }
 
-  function formatTime(hours) {
-    if (!isFinite(hours) || hours <= 0) return '—';
-    const h = Math.floor(hours);
-    const m = Math.round((hours - h) * 60);
-    if (h === 0) return m + ' min';
-    if (m === 0) return h + ' hr';
-    return h + ' hr ' + m + ' min';
+  function showError(msg) {
+    const el = document.getElementById('error');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+  }
+
+  async function geocode(address) {
+    const url = `https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(address)}&size=1`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.features || data.features.length === 0) throw new Error('Address not found: ' + address);
+    return data.features[0].geometry.coordinates; // [lng, lat]
+  }
+
+  async function lookupDistance() {
+    const from = document.getElementById('fromAddr').value.trim();
+    const to = document.getElementById('toAddr').value.trim();
+    if (!from || !to) { showError('Please enter both a from and to address.'); return; }
+
+    const btn = document.getElementById('goBtn');
+    btn.disabled = true;
+    btn.textContent = 'Looking up route…';
+    showError('');
+    document.getElementById('results').innerHTML = '';
+
+    try {
+      const [fromCoords, toCoords] = await Promise.all([geocode(from), geocode(to)]);
+
+      const routeRes = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+        method: 'POST',
+        headers: { 'Authorization': ORS_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coordinates: [fromCoords, toCoords] })
+      });
+      const routeData = await routeRes.json();
+
+      if (!routeData.routes || routeData.routes.length === 0) throw new Error('Could not find a route between those addresses.');
+
+      const distMeters = routeData.routes[0].summary.distance;
+      resolvedDistMi = distMeters / 1609.34;
+      renderResults(resolvedDistMi, from, to);
+    } catch (e) {
+      showError(e.message || 'Something went wrong. Please check the addresses and try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Calculate Trip';
+    }
   }
 
   function calculate() {
+    if (mode === 'addr') return;
     const raw = parseFloat(document.getElementById('distInput').value);
-    const container = document.getElementById('results');
-
     if (isNaN(raw) || raw <= 0) {
-      container.innerHTML = '<p class="placeholder">Enter a distance above<br>to see your drive times.</p>';
+      document.getElementById('results').innerHTML = '<p class="placeholder">Enter addresses or a distance<br>to see your trip cost.</p>';
       return;
     }
-
     const distMi = unit === 'mi' ? raw : raw / 1.60934;
+    renderResults(distMi);
+  }
+
+  function renderResults(distMi, fromLabel, toLabel) {
+    const container = document.getElementById('results');
     const { mpg, pricePerGallon, fuelLabel, priceDate } = config[vehicle];
     const gallonsUsed = distMi / mpg;
     const totalCost = gallonsUsed * pricePerGallon;
-
     const speeds = [65, 70, 75];
+
+    let distBadge = '';
+    if (fromLabel && toLabel) {
+      distBadge = `<div class="dist-badge">${fromLabel} &rarr; ${toLabel}<br><strong>${distMi.toFixed(1)} miles</strong></div>`;
+    }
 
     const cards = speeds.map((speed, i) => {
       const hours = distMi / speed;
@@ -263,7 +314,16 @@
       </div>
       <p class="price-note">${fuelLabel} &mdash; price as of ${priceDate}</p>`;
 
-    container.innerHTML = `<div class="cards">${cards}</div>${fuelSection}`;
+    container.innerHTML = `${distBadge}<div class="cards">${cards}</div>${fuelSection}`;
+  }
+
+  function formatTime(hours) {
+    if (!isFinite(hours) || hours <= 0) return '—';
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    if (h === 0) return m + ' min';
+    if (m === 0) return h + ' hr';
+    return h + ' hr ' + m + ' min';
   }
 </script>
 </html>
