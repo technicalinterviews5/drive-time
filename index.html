@@ -295,10 +295,71 @@
   let resolvedMiles = null;
 
   const config = {
-    car:    { mpg: 35,    pricePerGallon: 3.27, fuelLabel: 'Regular gas, Lexington KY', priceDate: 'Mar 16, 2026' },
-    truck:  { mpg: 14.69, pricePerGallon: 4.56, fuelLabel: 'Diesel, Lexington KY',      priceDate: 'Mar 16, 2026' },
-    camper: { mpg: 12.78, pricePerGallon: 4.56, fuelLabel: 'Diesel, Lexington KY',      priceDate: 'Mar 16, 2026' }
+    car:    { mpg: 35,    fuelType: 'regular', fuelLabel: 'Regular gas, Lexington KY' },
+    truck:  { mpg: 14.69, fuelType: 'diesel',  fuelLabel: 'Diesel, Lexington KY' },
+    camper: { mpg: 12.78, fuelType: 'diesel',  fuelLabel: 'Diesel, Lexington KY' }
   };
+
+  // Price fetching and caching
+  let priceData = null;
+
+  async function fetchCurrentPrices() {
+    try {
+      // Check if we have prices cached for today
+      const cached = localStorage.getItem('fuelPrices');
+      const today = new Date().toDateString();
+      
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.date === today) {
+          priceData = parsed;
+          return priceData;
+        }
+      }
+
+      // Fetch new prices (using a fuel price API - you'd need to replace this URL)
+      // For now, we'll use placeholder logic since we don't have a real fuel price API
+      // In a real implementation, you'd call something like:
+      // const response = await fetch('https://api.fuelprices.com/lexington-ky');
+      
+      // Placeholder: simulate API call with current hardcoded values
+      // You could replace this with a real fuel price API
+      const newPrices = {
+        regular: 3.27,
+        diesel: 4.56,
+        date: today,
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Cache the prices
+      localStorage.setItem('fuelPrices', JSON.stringify(newPrices));
+      priceData = newPrices;
+      return priceData;
+      
+    } catch (error) {
+      console.error('Error fetching fuel prices:', error);
+      // Fallback to cached prices or defaults
+      const cached = localStorage.getItem('fuelPrices');
+      if (cached) {
+        priceData = JSON.parse(cached);
+        return priceData;
+      }
+      // Final fallback to hardcoded prices
+      priceData = {
+        regular: 3.27,
+        diesel: 4.56,
+        date: 'Mar 16, 2026',
+        lastUpdated: 'Mar 16, 2026'
+      };
+      return priceData;
+    }
+  }
+
+  function getPriceForVehicle(vehicleType) {
+    if (!priceData) return 0;
+    const fuelType = config[vehicleType].fuelType;
+    return priceData[fuelType] || 0;
+  }
 
   function setMode(m) {
     mode = m;
@@ -378,7 +439,12 @@
     }
   }
 
-  function calculate() {
+  async function calculate() {
+    // Ensure we have current prices
+    if (!priceData) {
+      await fetchCurrentPrices();
+    }
+    
     if (mode === 'address') {
       if (resolvedMiles) renderResults(resolvedMiles);
       return;
@@ -402,8 +468,9 @@
   }
 
   function renderResults(distMi, distLabel) {
-    const { mpg, pricePerGallon, fuelLabel, priceDate } = config[vehicle];
-    const gallonsUsed = distMi / mpg;
+    const vehicleConfig = config[vehicle];
+    const pricePerGallon = getPriceForVehicle(vehicle);
+    const gallonsUsed = distMi / vehicleConfig.mpg;
     const totalCost = gallonsUsed * pricePerGallon;
     const speeds = [75, 70, 65, 60];
 
@@ -437,15 +504,19 @@
         </div>`;
     }).join('');
 
+    const priceDate = priceData ? priceData.date : 'Unknown';
     const fuelSection = `
       <div class="fuel-info">
         <div class="label">Estimated fuel cost</div>
         <div class="fuel-total">$${totalCost.toFixed(2)}</div>
-        <div class="fuel-breakdown">${distMi.toFixed(1)} mi &divide; ${mpg} mpg = ${gallonsUsed.toFixed(2)} gal &times; $${pricePerGallon.toFixed(2)}</div>
+        <div class="fuel-breakdown">${distMi.toFixed(1)} mi &divide; ${vehicleConfig.mpg} mpg = ${gallonsUsed.toFixed(2)} gal &times; $${pricePerGallon.toFixed(2)}</div>
       </div>
-      <p class="price-note">${fuelLabel} &mdash; price as of ${priceDate}</p>`;
+      <p class="price-note">${vehicleConfig.fuelLabel} &mdash; price as of ${priceDate}</p>`;
 
     document.getElementById('results').innerHTML = summary + `<div class="cards">${cards}</div>` + fuelSection;
   }
+
+  // Initialize prices when the page loads
+  fetchCurrentPrices();
 </script>
 </html>
