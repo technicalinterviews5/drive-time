@@ -6,8 +6,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Trip Cost" />
-  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon.png" />
+  <link rel="apple-touch-icon" href="favicon.png" />
   <title>Trip Cost</title>
+  <script src="config.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -284,7 +287,7 @@
 
 </body>
 <script>
-  const ORS_API_KEY = 'PASTE_API_KEY_HERE';
+  const ORS_API_KEY = CONFIG.ORS_API_KEY;
 
   let mode = 'address';
   let unit = 'mi';
