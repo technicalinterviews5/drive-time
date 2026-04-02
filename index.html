@@ -305,29 +305,73 @@
 
   async function fetchCurrentPrices() {
     try {
-      // Check if we have prices cached for today
+      // Check if we have prices cached for this week
       const cached = localStorage.getItem('fuelPrices');
-      const today = new Date().toDateString();
+      const now = new Date();
+      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+      const weekKey = weekStart.toDateString();
       
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed.date === today) {
+        if (parsed.weekKey === weekKey) {
           priceData = parsed;
           return priceData;
         }
       }
 
-      // Fetch new prices (using a fuel price API - you'd need to replace this URL)
-      // For now, we'll use placeholder logic since we don't have a real fuel price API
-      // In a real implementation, you'd call something like:
-      // const response = await fetch('https://api.fuelprices.com/lexington-ky');
+      // Fetch new prices from EIA API
+      // You need to get a free API key from: https://www.eia.gov/opendata/register.php
+      const EIA_API_KEY = CONFIG.EIA_API_KEY; // Get from config file
       
-      // Placeholder: simulate API call with current hardcoded values
-      // You could replace this with a real fuel price API
+      if (!EIA_API_KEY || EIA_API_KEY === 'PASTE_YOUR_EIA_API_KEY_HERE') {
+        // Fallback to hardcoded prices if no EIA key is set
+        console.log('EIA API key not configured, using fallback prices');
+        const fallbackPrices = {
+          regular: 3.27,
+          diesel: 4.56,
+          weekKey: weekKey,
+          source: 'Fallback prices',
+          lastUpdated: new Date().toISOString()
+        };
+        localStorage.setItem('fuelPrices', JSON.stringify(fallbackPrices));
+        priceData = fallbackPrices;
+        return priceData;
+      }
+
+      // Fetch Kentucky gasoline and diesel prices from EIA
+      // Using weekly retail gasoline prices for Kentucky and US No2 diesel prices
+      const gasUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[process][]=PTC&facets[product][]=EPM0&facets[series][]=EMM_EPM0_PTC_SKY_DPG&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
+      const dieselUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[product][]=EPD2D&facets[process][]=PTE&facets[series][]=EMM_EPD2D_PTE_SKY_DPG&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
+
+      const [gasResponse, dieselResponse] = await Promise.all([
+        fetch(gasUrl).catch(() => null),
+        fetch(dieselUrl).catch(() => null)
+      ]);
+
+      let gasPrice = 3.27; // Fallback
+      let dieselPrice = 4.56; // Fallback
+      let source = 'EIA (partial fallback)';
+
+      if (gasResponse && gasResponse.ok) {
+        const gasData = await gasResponse.json();
+        if (gasData.response && gasData.response.data && gasData.response.data.length > 0) {
+          gasPrice = parseFloat(gasData.response.data[0].value) || 3.27;
+          source = 'EIA Weekly Data';
+        }
+      }
+
+      if (dieselResponse && dieselResponse.ok) {
+        const dieselData = await dieselResponse.json();
+        if (dieselData.response && dieselData.response.data && dieselData.response.data.length > 0) {
+          dieselPrice = parseFloat(dieselData.response.data[0].value) || 4.56;
+        }
+      }
+
       const newPrices = {
-        regular: 3.27,
-        diesel: 4.56,
-        date: today,
+        regular: gasPrice,
+        diesel: dieselPrice,
+        weekKey: weekKey,
+        source: source,
         lastUpdated: new Date().toISOString()
       };
 
@@ -348,8 +392,9 @@
       priceData = {
         regular: 3.27,
         diesel: 4.56,
-        date: 'Mar 16, 2026',
-        lastUpdated: 'Mar 16, 2026'
+        weekKey: 'fallback',
+        source: 'Hardcoded fallback',
+        lastUpdated: new Date().toISOString()
       };
       return priceData;
     }
@@ -504,14 +549,16 @@
         </div>`;
     }).join('');
 
-    const priceDate = priceData ? priceData.date : 'Unknown';
+    const priceDate = priceData ? 
+      (priceData.source ? `${priceData.source}, week of ${new Date(priceData.weekKey || priceData.lastUpdated).toLocaleDateString()}` : priceData.date || 'Unknown') 
+      : 'Unknown';
     const fuelSection = `
       <div class="fuel-info">
         <div class="label">Estimated fuel cost</div>
         <div class="fuel-total">$${totalCost.toFixed(2)}</div>
         <div class="fuel-breakdown">${distMi.toFixed(1)} mi &divide; ${vehicleConfig.mpg} mpg = ${gallonsUsed.toFixed(2)} gal &times; $${pricePerGallon.toFixed(2)}</div>
       </div>
-      <p class="price-note">${vehicleConfig.fuelLabel} &mdash; price as of ${priceDate}</p>`;
+      <p class="price-note">${vehicleConfig.fuelLabel} &mdash; ${priceDate}</p>`;
 
     document.getElementById('results').innerHTML = summary + `<div class="cards">${cards}</div>` + fuelSection;
   }
