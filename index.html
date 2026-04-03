@@ -295,9 +295,9 @@
   let resolvedMiles = null;
 
   const config = {
-    car:    { mpg: 35,    fuelType: 'regular', fuelLabel: 'Regular gas, Lexington KY' },
-    truck:  { mpg: 14.69, fuelType: 'diesel',  fuelLabel: 'Diesel, Lexington KY' },
-    camper: { mpg: 12.78, fuelType: 'diesel',  fuelLabel: 'Diesel, Lexington KY' }
+    car:    { mpg: 35,    fuelType: 'regular', fuelLabel: 'Regular gas, US avg' },
+    truck:  { mpg: 14.69, fuelType: 'diesel',  fuelLabel: 'Diesel, US avg' },
+    camper: { mpg: 12.78, fuelType: 'diesel',  fuelLabel: 'Diesel, US avg' }
   };
 
   // Price fetching and caching
@@ -320,17 +320,16 @@
       }
 
       // Fetch new prices from EIA API
-      // You need to get a free API key from: https://www.eia.gov/opendata/register.php
-      const EIA_API_KEY = CONFIG.EIA_API_KEY; // Get from config file
+      // Using US national average regular gasoline and No. 2 diesel retail prices (weekly data)
+      const EIA_API_KEY = CONFIG.EIA_API_KEY;
       
       if (!EIA_API_KEY || EIA_API_KEY === 'PASTE_YOUR_EIA_API_KEY_HERE') {
-        // Fallback to hardcoded prices if no EIA key is set
         console.log('EIA API key not configured, using fallback prices');
         const fallbackPrices = {
           regular: 3.27,
           diesel: 4.56,
           weekKey: weekKey,
-          source: 'Fallback prices',
+          source: 'Fallback prices (no EIA key)',
           lastUpdated: new Date().toISOString()
         };
         localStorage.setItem('fuelPrices', JSON.stringify(fallbackPrices));
@@ -338,47 +337,70 @@
         return priceData;
       }
 
-      // Fetch Kentucky gasoline and diesel prices from EIA
-      // Using weekly retail gasoline prices for Kentucky and US No2 diesel prices
-      const gasUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[process][]=PTC&facets[product][]=EPM0&facets[series][]=EMM_EPM0_PTC_SKY_DPG&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
-      const dieselUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[product][]=EPD2D&facets[process][]=PTE&facets[series][]=EMM_EPD2D_PTE_SKY_DPG&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
+      // Try to fetch US national average prices (more reliable than state-specific)
+      try {
+        // US Regular Gasoline Retail Price (weekly)
+        const gasUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPM0&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
+        
+        // US No. 2 Diesel Retail Price (weekly)  
+        const dieselUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPD2DXL0&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
 
-      const [gasResponse, dieselResponse] = await Promise.all([
-        fetch(gasUrl).catch(() => null),
-        fetch(dieselUrl).catch(() => null)
-      ]);
+        const [gasResponse, dieselResponse] = await Promise.all([
+          fetch(gasUrl),
+          fetch(dieselUrl)
+        ]);
 
-      let gasPrice = 3.27; // Fallback
-      let dieselPrice = 4.56; // Fallback
-      let source = 'EIA (partial fallback)';
+        let gasPrice = 3.27; // Fallback
+        let dieselPrice = 4.56; // Fallback
+        let source = 'EIA US Average';
+        let hasApiData = false;
 
-      if (gasResponse && gasResponse.ok) {
-        const gasData = await gasResponse.json();
-        if (gasData.response && gasData.response.data && gasData.response.data.length > 0) {
-          gasPrice = parseFloat(gasData.response.data[0].value) || 3.27;
-          source = 'EIA Weekly Data';
+        if (gasResponse.ok) {
+          const gasData = await gasResponse.json();
+          if (gasData.response && gasData.response.data && gasData.response.data.length > 0) {
+            gasPrice = parseFloat(gasData.response.data[0].value) || 3.27;
+            hasApiData = true;
+          }
         }
-      }
 
-      if (dieselResponse && dieselResponse.ok) {
-        const dieselData = await dieselResponse.json();
-        if (dieselData.response && dieselData.response.data && dieselData.response.data.length > 0) {
-          dieselPrice = parseFloat(dieselData.response.data[0].value) || 4.56;
+        if (dieselResponse.ok) {
+          const dieselData = await dieselResponse.json();
+          if (dieselData.response && dieselData.response.data && dieselData.response.data.length > 0) {
+            dieselPrice = parseFloat(dieselData.response.data[0].value) || 4.56;
+            hasApiData = true;
+          }
         }
+
+        if (!hasApiData) {
+          throw new Error('No data returned from EIA API');
+        }
+
+        const newPrices = {
+          regular: gasPrice,
+          diesel: dieselPrice,
+          weekKey: weekKey,
+          source: source,
+          lastUpdated: new Date().toISOString()
+        };
+
+        localStorage.setItem('fuelPrices', JSON.stringify(newPrices));
+        priceData = newPrices;
+        return priceData;
+
+      } catch (apiError) {
+        console.log('EIA API error, using fallback:', apiError.message);
+        // Fallback to hardcoded prices
+        const fallbackPrices = {
+          regular: 3.27,
+          diesel: 4.56,
+          weekKey: weekKey,
+          source: 'Fallback (EIA unavailable)',
+          lastUpdated: new Date().toISOString()
+        };
+        localStorage.setItem('fuelPrices', JSON.stringify(fallbackPrices));
+        priceData = fallbackPrices;
+        return priceData;
       }
-
-      const newPrices = {
-        regular: gasPrice,
-        diesel: dieselPrice,
-        weekKey: weekKey,
-        source: source,
-        lastUpdated: new Date().toISOString()
-      };
-
-      // Cache the prices
-      localStorage.setItem('fuelPrices', JSON.stringify(newPrices));
-      priceData = newPrices;
-      return priceData;
       
     } catch (error) {
       console.error('Error fetching fuel prices:', error);
