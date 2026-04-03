@@ -326,8 +326,8 @@
       if (!EIA_API_KEY || EIA_API_KEY === 'PASTE_YOUR_EIA_API_KEY_HERE') {
         console.log('EIA API key not configured, using fallback prices');
         const fallbackPrices = {
-          regular: 3.27,
-          diesel: 4.56,
+          regular: 3.72,
+          diesel: 5.02,
           weekKey: weekKey,
           source: 'Fallback prices (no EIA key)',
           lastUpdated: new Date().toISOString()
@@ -350,8 +350,8 @@
           fetch(dieselUrl)
         ]);
 
-        let gasPrice = 3.27; // Fallback
-        let dieselPrice = 4.56; // Fallback
+        let gasPrice = 3.72; // Fallback
+        let dieselPrice = 5.02; // Fallback
         let source = 'EIA US Average';
         let hasApiData = false;
 
@@ -391,8 +391,8 @@
         console.log('EIA API error, using fallback:', apiError.message);
         // Fallback to hardcoded prices
         const fallbackPrices = {
-          regular: 3.27,
-          diesel: 4.56,
+          regular: 3.72,
+          diesel: 5.02,
           weekKey: weekKey,
           source: 'Fallback (EIA unavailable)',
           lastUpdated: new Date().toISOString()
@@ -412,8 +412,8 @@
       }
       // Final fallback to hardcoded prices
       priceData = {
-        regular: 3.27,
-        diesel: 4.56,
+        regular: 3.72,
+        diesel: 5.02,
         weekKey: 'fallback',
         source: 'Hardcoded fallback',
         lastUpdated: new Date().toISOString()
