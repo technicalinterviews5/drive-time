@@ -107,10 +107,27 @@
       border-radius: 10px;
     }
 
+    .toggle.vehicle {
+      width: 100%;
+      margin-bottom: 14px;
+    }
+
+    .toggle.vehicle button {
+      flex: 1;
+      padding: 10px 4px;
+      font-size: 14px;
+    }
+
     .toggle.vehicle button.active {
       background: #34c759;
       color: #fff;
       border-radius: 10px;
+    }
+
+    .toggle.vehicle .mpg {
+      font-size: 12px;
+      font-weight: 400;
+      margin-top: 2px;
     }
 
     .lookup-btn {
@@ -265,22 +282,7 @@
     </div>
   </div>
 
-  <!-- Vehicle toggle (always visible) -->
-  <div class="toggle vehicle" style="width:100%; margin-bottom: 14px;">
-    <button class="active" id="btn-car" onclick="setVehicle('car')" style="flex:1;">
-      <div>Car</div>
-      <div style="font-size:12px; font-weight:400; margin-top:2px;">35 mpg</div>
-    </button>
-    <button id="btn-truck" onclick="setVehicle('truck')" style="flex:1;">
-      <div>Truck</div>
-      <div style="font-size:12px; font-weight:400; margin-top:2px;">14.7 mpg</div>
-    </button>
-    <button id="btn-camper" onclick="setVehicle('camper')" style="flex:1;">
-      <div>Truck/Camper</div>
-      <div style="font-size:12px; font-weight:400; margin-top:2px;">12.8 mpg</div>
-    </button>
-  </div>
-
+  <!-- Results (the vehicle toggle is rendered here, right above the fuel cost) -->
   <div id="results">
     <p class="placeholder">Enter addresses or a distance<br>to see your trip cost.</p>
   </div>
@@ -289,153 +291,149 @@
 <script>
   const ORS_API_KEY = CONFIG.ORS_API_KEY;
 
+  const PLACEHOLDER_HTML = '<p class="placeholder">Enter addresses or a distance<br>to see your trip cost.</p>';
+
   let mode = 'address';
   let unit = 'mi';
   let vehicle = 'car';
   let resolvedMiles = null;
+  let resolvedLabel = null;
 
   const config = {
-    car:    { mpg: 35,    fuelType: 'regular', fuelLabel: 'Regular gas, US avg' },
-    truck:  { mpg: 14.69, fuelType: 'diesel',  fuelLabel: 'Diesel, US avg' },
-    camper: { mpg: 12.78, fuelType: 'diesel',  fuelLabel: 'Diesel, US avg' }
+    car:    { name: 'Car',          mpg: 35,    fuelType: 'regular', fuelLabel: 'Regular gas, US avg' },
+    suv:    { name: 'SUV',          mpg: 22,    fuelType: 'regular', fuelLabel: 'Regular gas, US avg' },
+    truck:  { name: 'Truck',        mpg: 14.69, fuelType: 'diesel',  fuelLabel: 'Diesel, US avg' },
+    camper: { name: 'Truck/Camper', mpg: 12.78, fuelType: 'diesel',  fuelLabel: 'Diesel, US avg' }
   };
+  const vehicleOrder = ['car', 'suv', 'truck', 'camper'];
 
-  // Price fetching and caching
+  // ---------------------------------------------------------------
+  // Fuel prices
+  // ---------------------------------------------------------------
+  // One set of fallback prices, used whenever live EIA data is unavailable.
+  const FALLBACK_PRICES = { regular: 3.72, diesel: 5.02 };
+  const PRICE_CACHE_KEY = 'fuelPrices_v2';
+
   let priceData = null;
+  let pricePromise = null;
+
+  function getWeekKey() {
+    const now = new Date();
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    return weekStart.toDateString();
+  }
+
+  // Latest weekly US-average retail price for one EIA product code.
+  // Returns { price, period } or null if the request or the value is unusable.
+  async function fetchEiaLatest(product, apiKey) {
+    const url = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${apiKey}&frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=${product}&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const json = await res.json();
+      const row = json.response && json.response.data && json.response.data[0];
+      const price = row ? parseFloat(row.value) : NaN;
+      if (!isFinite(price) || price <= 0) return null;
+      return { price: price, period: row.period };
+    } catch (err) {
+      console.log('EIA request failed for ' + product + ':', err.message);
+      return null;
+    }
+  }
 
   async function fetchCurrentPrices() {
+    const weekKey = getWeekKey();
+
+    // Use the cache only if it holds live EIA prices for both fuels this week.
     try {
-      // Check if we have prices cached for this week
-      const cached = localStorage.getItem('fuelPrices');
-      const now = new Date();
-      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
-      const weekKey = weekStart.toDateString();
-      
+      const cached = localStorage.getItem(PRICE_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed.weekKey === weekKey) {
+        if (parsed.weekKey === weekKey && parsed.regularLive && parsed.dieselLive) {
           priceData = parsed;
           return priceData;
         }
       }
-
-      // Fetch new prices from EIA API
-      // Using US national average regular gasoline and No. 2 diesel retail prices (weekly data)
-      const EIA_API_KEY = CONFIG.EIA_API_KEY;
-      
-      if (!EIA_API_KEY || EIA_API_KEY === 'PASTE_YOUR_EIA_API_KEY_HERE') {
-        console.log('EIA API key not configured, using fallback prices');
-        const fallbackPrices = {
-          regular: 3.72,
-          diesel: 5.02,
-          weekKey: weekKey,
-          source: 'Fallback prices (no EIA key)',
-          lastUpdated: new Date().toISOString()
-        };
-        localStorage.setItem('fuelPrices', JSON.stringify(fallbackPrices));
-        priceData = fallbackPrices;
-        return priceData;
-      }
-
-      // Try to fetch US national average prices (more reliable than state-specific)
-      try {
-        // US Regular Gasoline Retail Price (weekly)
-        const gasUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPM0&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
-        
-        // US No. 2 Diesel Retail Price (weekly)  
-        const dieselUrl = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${EIA_API_KEY}&frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPD2DXL0&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=1`;
-
-        const [gasResponse, dieselResponse] = await Promise.all([
-          fetch(gasUrl),
-          fetch(dieselUrl)
-        ]);
-
-        let gasPrice = 3.72; // Fallback
-        let dieselPrice = 5.02; // Fallback
-        let source = 'EIA US Average';
-        let hasApiData = false;
-
-        if (gasResponse.ok) {
-          const gasData = await gasResponse.json();
-          if (gasData.response && gasData.response.data && gasData.response.data.length > 0) {
-            gasPrice = parseFloat(gasData.response.data[0].value) || 3.27;
-            hasApiData = true;
-          }
-        }
-
-        if (dieselResponse.ok) {
-          const dieselData = await dieselResponse.json();
-          if (dieselData.response && dieselData.response.data && dieselData.response.data.length > 0) {
-            dieselPrice = parseFloat(dieselData.response.data[0].value) || 4.56;
-            hasApiData = true;
-          }
-        }
-
-        if (!hasApiData) {
-          throw new Error('No data returned from EIA API');
-        }
-
-        const newPrices = {
-          regular: gasPrice,
-          diesel: dieselPrice,
-          weekKey: weekKey,
-          source: source,
-          lastUpdated: new Date().toISOString()
-        };
-
-        localStorage.setItem('fuelPrices', JSON.stringify(newPrices));
-        priceData = newPrices;
-        return priceData;
-
-      } catch (apiError) {
-        console.log('EIA API error, using fallback:', apiError.message);
-        // Fallback to hardcoded prices
-        const fallbackPrices = {
-          regular: 3.72,
-          diesel: 5.02,
-          weekKey: weekKey,
-          source: 'Fallback (EIA unavailable)',
-          lastUpdated: new Date().toISOString()
-        };
-        localStorage.setItem('fuelPrices', JSON.stringify(fallbackPrices));
-        priceData = fallbackPrices;
-        return priceData;
-      }
-      
-    } catch (error) {
-      console.error('Error fetching fuel prices:', error);
-      // Fallback to cached prices or defaults
-      const cached = localStorage.getItem('fuelPrices');
-      if (cached) {
-        priceData = JSON.parse(cached);
-        return priceData;
-      }
-      // Final fallback to hardcoded prices
-      priceData = {
-        regular: 3.72,
-        diesel: 5.02,
-        weekKey: 'fallback',
-        source: 'Hardcoded fallback',
-        lastUpdated: new Date().toISOString()
-      };
-      return priceData;
+    } catch (err) {
+      console.log('Could not read price cache:', err.message);
     }
+
+    const EIA_API_KEY = CONFIG.EIA_API_KEY;
+    let gas = null;
+    let diesel = null;
+
+    if (EIA_API_KEY && EIA_API_KEY !== 'PASTE_YOUR_EIA_API_KEY_HERE') {
+      [gas, diesel] = await Promise.all([
+        fetchEiaLatest('EPM0', EIA_API_KEY),     // Regular gasoline
+        fetchEiaLatest('EPD2DXL0', EIA_API_KEY)  // No. 2 diesel
+      ]);
+    } else {
+      console.log('EIA API key not configured, using fallback prices');
+    }
+
+    priceData = {
+      regular: gas ? gas.price : FALLBACK_PRICES.regular,
+      diesel: diesel ? diesel.price : FALLBACK_PRICES.diesel,
+      regularPeriod: gas ? gas.period : null,
+      dieselPeriod: diesel ? diesel.period : null,
+      regularLive: !!gas,
+      dieselLive: !!diesel,
+      weekKey: weekKey,
+      lastUpdated: new Date().toISOString()
+    };
+
+    // Only cache complete, live data so a failed lookup is retried on the next load.
+    if (gas && diesel) {
+      try {
+        localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(priceData));
+      } catch (err) {
+        console.log('Could not write price cache:', err.message);
+      }
+    }
+
+    return priceData;
+  }
+
+  // Share one in-flight/finished lookup across callers.
+  function ensurePrices() {
+    if (!pricePromise) pricePromise = fetchCurrentPrices();
+    return pricePromise;
   }
 
   function getPriceForVehicle(vehicleType) {
-    if (!priceData) return 0;
     const fuelType = config[vehicleType].fuelType;
-    return priceData[fuelType] || 0;
+    if (!priceData) return FALLBACK_PRICES[fuelType];
+    return priceData[fuelType];
   }
 
+  function formatPeriod(period) {
+    const parts = period.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2])
+      .toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // Describes where the price came from, using the date of the EIA data actually used.
+  function getPriceNote(vehicleType) {
+    const cfg = config[vehicleType];
+    const fuel = cfg.fuelType;
+    if (priceData && priceData[fuel + 'Live'] && priceData[fuel + 'Period']) {
+      return `${cfg.fuelLabel} &mdash; EIA, as of ${formatPeriod(priceData[fuel + 'Period'])}`;
+    }
+    return `${cfg.fuelLabel} &mdash; fallback estimate (live price unavailable)`;
+  }
+
+  // ---------------------------------------------------------------
+  // Controls
+  // ---------------------------------------------------------------
   function setMode(m) {
     mode = m;
     resolvedMiles = null;
+    resolvedLabel = null;
     document.getElementById('btn-addr').classList.toggle('active', m === 'address');
     document.getElementById('btn-dist').classList.toggle('active', m === 'distance');
     document.getElementById('addr-section').classList.toggle('hidden', m !== 'address');
     document.getElementById('dist-section').classList.toggle('hidden', m !== 'distance');
-    document.getElementById('results').innerHTML = '<p class="placeholder">Enter addresses or a distance<br>to see your trip cost.</p>';
+    document.getElementById('results').innerHTML = PLACEHOLDER_HTML;
   }
 
   function setUnit(u) {
@@ -447,12 +445,25 @@
 
   function setVehicle(v) {
     vehicle = v;
-    document.getElementById('btn-car').classList.toggle('active', v === 'car');
-    document.getElementById('btn-truck').classList.toggle('active', v === 'truck');
-    document.getElementById('btn-camper').classList.toggle('active', v === 'camper');
-    calculate();
+    calculate(); // re-renders the results, including the vehicle toggle
   }
 
+  function vehicleToggleHTML() {
+    const buttons = vehicleOrder.map(v => {
+      const c = config[v];
+      const mpgText = +c.mpg.toFixed(1);
+      return `
+        <button class="${v === vehicle ? 'active' : ''}" onclick="setVehicle('${v}')">
+          <div>${c.name}</div>
+          <div class="mpg">${mpgText} mpg</div>
+        </button>`;
+    }).join('');
+    return `<div class="toggle vehicle">${buttons}</div>`;
+  }
+
+  // ---------------------------------------------------------------
+  // Route lookup
+  // ---------------------------------------------------------------
   async function geocode(address) {
     const url = `https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(address)}&size=1`;
     const res = await fetch(url);
@@ -494,9 +505,12 @@
         throw new Error('No route found between those addresses.');
       }
 
+      await ensurePrices();
+
       const meters = routeData.routes[0].summary.distance;
       resolvedMiles = meters / 1609.34;
-      renderResults(resolvedMiles, `${resolvedMiles.toFixed(1)} mi by road`);
+      resolvedLabel = `${resolvedMiles.toFixed(1)} mi by road`;
+      renderResults(resolvedMiles, resolvedLabel);
 
     } catch (err) {
       results.innerHTML = `<div class="error-msg">${err.message || 'Something went wrong. Please check your addresses and try again.'}</div>`;
@@ -507,18 +521,15 @@
   }
 
   async function calculate() {
-    // Ensure we have current prices
-    if (!priceData) {
-      await fetchCurrentPrices();
-    }
-    
+    await ensurePrices();
+
     if (mode === 'address') {
-      if (resolvedMiles) renderResults(resolvedMiles);
+      if (resolvedMiles) renderResults(resolvedMiles, resolvedLabel);
       return;
     }
     const raw = parseFloat(document.getElementById('distInput').value);
     if (isNaN(raw) || raw <= 0) {
-      document.getElementById('results').innerHTML = '<p class="placeholder">Enter addresses or a distance<br>to see your trip cost.</p>';
+      document.getElementById('results').innerHTML = PLACEHOLDER_HTML;
       return;
     }
     const miles = unit === 'mi' ? raw : raw / 1.60934;
@@ -551,7 +562,7 @@
       const isSlowest = i === speeds.length - 1;
       let badge = '';
       let cardClass = 'card';
-      
+
       if (isFastest) {
         badge = '<div class="badge">fastest</div>';
         cardClass += ' fastest';
@@ -561,7 +572,7 @@
       } else {
         badge = '<div class="spacer"></div>';
       }
-      
+
       return `
         <div class="${cardClass}">
           ${badge}
@@ -571,21 +582,22 @@
         </div>`;
     }).join('');
 
-    const priceDate = priceData ? 
-      (priceData.source ? `${priceData.source}, week of ${new Date(priceData.weekKey || priceData.lastUpdated).toLocaleDateString()}` : priceData.date || 'Unknown') 
-      : 'Unknown';
     const fuelSection = `
       <div class="fuel-info">
         <div class="label">Estimated fuel cost</div>
         <div class="fuel-total">$${totalCost.toFixed(2)}</div>
         <div class="fuel-breakdown">${distMi.toFixed(1)} mi &divide; ${vehicleConfig.mpg} mpg = ${gallonsUsed.toFixed(2)} gal &times; $${pricePerGallon.toFixed(2)}</div>
       </div>
-      <p class="price-note">${vehicleConfig.fuelLabel} &mdash; ${priceDate}</p>`;
+      <p class="price-note">${getPriceNote(vehicle)}</p>`;
 
-    document.getElementById('results').innerHTML = summary + `<div class="cards">${cards}</div>` + fuelSection;
+    document.getElementById('results').innerHTML =
+      summary +
+      `<div class="cards">${cards}</div>` +
+      vehicleToggleHTML() +
+      fuelSection;
   }
 
   // Initialize prices when the page loads
-  fetchCurrentPrices();
+  ensurePrices();
 </script>
 </html>
